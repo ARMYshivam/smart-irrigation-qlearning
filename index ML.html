@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Smart Irrigation – Q-Learning</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap">
+<style>
+:root{--bg:#E6EEE4;--card:#F6FAF4;--ink:#17302A;--mute:#5B7168;--line:#C5D4C6;--water:#1D6FA5;--soil:#7A5232;--bad:#B3453A;--good:#2E7D4F;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10201C;--card:#183029;--ink:#E4F0E6;--mute:#93AFA3;--line:#2B4A40;--water:#5FB3E8;--soil:#C9955F;--bad:#E27B6F;--good:#6FCB92}}
+:root[data-theme="dark"]{--bg:#10201C;--card:#183029;--ink:#E4F0E6;--mute:#93AFA3;--line:#2B4A40;--water:#5FB3E8;--soil:#C9955F;--bad:#E27B6F;--good:#6FCB92}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,sans-serif;line-height:1.5}
+main{max-width:980px;margin:0 auto;padding:24px 16px 40px}
+h1{font-size:clamp(1.8rem,5vw,2.8rem);font-weight:800;margin:0 0 4px;letter-spacing:-.02em}
+.sub{color:var(--mute);margin:0 0 24px;max-width:60ch}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:720px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+h2{font-size:1rem;font-weight:600;margin:0 0 12px;color:var(--mute)}
+.row{margin-bottom:14px}.row b{display:block;margin-bottom:6px;font-weight:600}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{flex:1;padding:12px;border:0;background:transparent;color:var(--ink);font:inherit;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--card);font-weight:600}
+button:focus-visible{outline:3px solid var(--water);outline-offset:-3px}
+.decision{text-align:center;padding:26px 12px}
+.drops{font-size:2.4rem;min-height:3rem;letter-spacing:.2em}
+.big{font-size:clamp(1.8rem,6vw,2.6rem);font-weight:800;margin:4px 0}
+.why{color:var(--mute);margin:0}
+.bar{display:grid;grid-template-columns:110px 1fr 56px;gap:8px;align-items:center;margin:8px 0;font-size:.9rem}
+.track{height:10px;background:var(--line);border-radius:6px;overflow:hidden}
+.fill{height:100%;background:var(--water);transition:width .3s}
+.fill.best{background:var(--good)}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+tr.cur{background:color-mix(in srgb,var(--water) 18%,transparent)}
+.wrap{overflow-x:auto}
+.act{background:var(--water);color:#fff;border:0;border-radius:10px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;margin-top:10px}
+svg{width:100%;height:auto;display:block}
+.full{grid-column:1/-1}
+</style>
+</head>
+<body>
+<main>
+<h1>Smart Irrigation</h1>
+<p class="sub">An agent trained with Q-Learning decides when to water. Pick the field conditions and see what it learned.</p>
+<div class="grid">
+  <section class="card">
+    <h2>Field conditions</h2>
+    <div class="row"><b>Soil moisture</b><div class="seg" data-k="soil"><button data-v="0">Dry</button><button data-v="1">Wet</button></div></div>
+    <div class="row"><b>Temperature</b><div class="seg" data-k="temp"><button data-v="0">Normal</button><button data-v="1">High</button></div></div>
+    <div class="row"><b>Rain</b><div class="seg" data-k="rain"><button data-v="0">No</button><button data-v="1">Yes</button></div></div>
+  </section>
+  <section class="card decision" aria-live="polite">
+    <div class="drops" id="drops"></div>
+    <div class="big" id="act"></div>
+    <p class="why" id="why"></p>
+  </section>
+  <section class="card">
+    <h2>Q-values for this condition</h2>
+    <div id="bars"></div>
+  </section>
+  <section class="card">
+    <h2>Training progress (average reward)</h2>
+    <svg id="chart" viewBox="0 0 320 150" role="img" aria-label="Average reward per 100 episodes"></svg>
+    <button class="act" id="retrain">Train again</button>
+    <span class="why" id="ep" style="margin-left:8px"></span>
+  </section>
+  <section class="card full">
+    <h2>Learned policy (Q-table)</h2>
+    <div class="wrap"><table id="tbl"></table></div>
+  </section>
+</div>
+</main>
+<script>
+const ACTIONS=["DON'T WATER","WATER","MORE WATER"],DROPS=["🚫","💧","💧💧💧"];
+const SN=["Dry","Wet"],TN=["Normal","High"],RN=["No","Yes"];
+const idx=(s,t,r)=>s*4+t*2+r, dec=i=>[i>>2,(i>>1)&1,i&1];
+function reward(st,a){const [s,t,r]=dec(st);
+  if(r)return [10,-10,-15][a]; if(s)return [10,-5,-10][a];
+  return t?[-10,5,10][a]:[-8,10,-3][a];}
+const WHY=(s,t,r)=>r?"It is raining, so the plants get water for free.":s?"The soil is already wet, so extra water is wasted.":t?"Dry soil and high heat: the plants need a lot of water.":"The soil is dry, so a normal watering is enough.";
+let Q,hist=[],cond={soil:0,temp:1,rain:0};
+function train(){
+  Q=Array.from({length:8},()=>[0,0,0]);hist=[];let eps=1,tot=0,n=0;
+  for(let e=0;e<3000;e++){
+    let st=Math.floor(Math.random()*8);
+    for(let k=0;k<10;k++){
+      const a=Math.random()<eps?Math.floor(Math.random()*3):Q[st].indexOf(Math.max(...Q[st]));
+      const r=reward(st,a),ns=Math.floor(Math.random()*8);
+      Q[st][a]+=0.1*(r+0.9*Math.max(...Q[ns])-Q[st][a]);
+      tot+=r;n++;st=ns;
+    }
+    eps=Math.max(0.05,eps*0.995);
+    if((e+1)%100===0){hist.push(tot/n);tot=0;n=0;}
+  }
+}
+const best=i=>Q[i].indexOf(Math.max(...Q[i]));
+function render(){
+  const i=idx(cond.soil,cond.temp,cond.rain),b=best(i);
+  document.querySelectorAll(".seg").forEach(g=>g.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(+x.dataset.v===cond[g.dataset.k]))));
+  drops.textContent=DROPS[b];act.textContent=ACTIONS[b];why.textContent=WHY(cond.soil,cond.temp,cond.rain);
+  const mn=Math.min(...Q[i]),mx=Math.max(...Q[i]),sp=(mx-mn)||1;
+  bars.innerHTML=ACTIONS.map((n,a)=>`<div class="bar"><span>${n}</span><div class="track"><div class="fill ${a===b?"best":""}" style="width:${8+92*(Q[i][a]-mn)/sp}%"></div></div><span>${Q[i][a].toFixed(1)}</span></div>`).join("");
+  tbl.innerHTML="<tr><th>Soil</th><th>Temp</th><th>Rain</th><th>Best action</th></tr>"+Q.map((_,s)=>{const [a,t,r]=dec(s);return `<tr class="${s===i?"cur":""}"><td>${SN[a]}</td><td>${TN[t]}</td><td>${RN[r]}</td><td><b>${ACTIONS[best(s)]}</b></td></tr>`}).join("");
+  const lo=Math.min(...hist),hi=Math.max(...hist),W=320,H=150,p=14;
+  const pts=hist.map((v,k)=>`${p+k*(W-2*p)/(hist.length-1)},${H-p-(v-lo)/((hi-lo)||1)*(H-2*p)}`).join(" ");
+  chart.innerHTML=`<line x1="${p}" y1="${H-p}" x2="${W-p}" y2="${H-p}" stroke="var(--line)"/><polyline points="${pts}" fill="none" stroke="var(--water)" stroke-width="2.5"/><text x="${p}" y="10" font-size="9" fill="var(--mute)">${hi.toFixed(1)}</text><text x="${p}" y="${H-3}" font-size="9" fill="var(--mute)">${lo.toFixed(1)}</text><text x="${W-p}" y="${H-3}" font-size="9" text-anchor="end" fill="var(--mute)">3000 episodes</text>`;
+  ep.textContent="Final avg reward: "+hist[hist.length-1].toFixed(1);
+}
+document.querySelectorAll(".seg button").forEach(x=>x.onclick=()=>{cond[x.parentNode.dataset.k]=+x.dataset.v;render();});
+retrain.onclick=()=>{train();render();};
+train();render();
+</script>
+</body>
+</html>
