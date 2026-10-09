@@ -1,73 +1,128 @@
+"""
+Smart Irrigation System using Q-Learning
+----------------------------------------
+State  : (soil, temperature, rain)  -> 3 x 2 x 2 = 12 states
+Action : 0 = Don't water, 1 = Water, 2 = More water
+Goal   : keep soil moisture healthy while using as little water as possible.
+Run    : python irrigation_qlearning.py
+"""
 import random
 import numpy as np
 
-# ---------- 1. STATES & ACTIONS ----------
-SOIL = ["Dry", "Wet"]
+SOIL = ["Dry", "OK", "Wet"]
 TEMP = ["Normal", "High"]
 RAIN = ["No", "Yes"]
-ACTIONS = ["DON'T WATER", "WATER", "MORE WATER"]
+ACTIONS = ["Don't water", "Water", "More water"]
+
+# Q-Learning hyper-parameters
+ALPHA = 0.1        # learning rate
+GAMMA = 0.9        # discount factor
+EPS_START = 1.0    # exploration at start
+EPS_MIN = 0.05     # exploration at end
+EPISODES = 1000
+STEPS = 30         # days per episode
+
+random.seed(42)
+np.random.seed(42)
+
+
+# ---------------- Environment (simulated field) ----------------
+def bucket(level):
+    """Soil moisture level 0..5 -> Dry(0) / OK(1) / Wet(2)."""
+    return 0 if level < 2 else 1 if level < 4 else 2
+
 
 def state_index(soil, temp, rain):
-    return soil * 4 + temp * 2 + rain          # 0..7
+    return soil * 4 + temp * 2 + rain
 
-def decode(s):
-    return s // 4, (s // 2) % 2, s % 2
 
-N_STATES, N_ACTIONS = 8, 3
+def new_weather():
+    return {"temp": int(random.random() < 0.5), "rain": int(random.random() < 0.2)}
 
-# ---------- 2. REWARD FUNCTION ----------
-def get_reward(state, action):
-    soil, temp, rain = decode(state)
-    if rain == 1:                               # raining
-        return {0: 10, 1: -10, 2: -15}[action]
-    if soil == 1:                               # wet soil, no rain
-        return {0: 10, 1: -5, 2: -10}[action]
-    if temp == 1:                               # dry + hot
-        return {0: -10, 1: 5, 2: 10}[action]
-    return {0: -8, 1: 10, 2: -3}[action]        # dry + normal temp
 
-# ---------- 3. TRAINING ----------
-alpha, gamma = 0.1, 0.9                         # learning rate, discount
-epsilon, eps_min, eps_decay = 1.0, 0.05, 0.995
-episodes = 3000
+def env_step(level, action, weather):
+    """Return (next_moisture_level, reward)."""
+    change = 0
+    if random.random() < (0.8 if weather["temp"] else 0.35):   # evaporation
+        change -= 1
+    if weather["rain"] and random.random() < 0.9:               # rain adds water
+        change += 1
+    change += action                                            # irrigation adds water
+    new_level = max(0, min(5, level + change))
 
-Q = np.zeros((N_STATES, N_ACTIONS))
+    if 2 <= new_level <= 3:
+        reward = 10                                  # healthy soil
+    elif new_level < 2:
+        reward = -15 if new_level == 0 else -10      # too dry
+    else:
+        reward = -10 if new_level == 5 else -5       # too wet
 
-for ep in range(episodes):
-    state = random.randint(0, N_STATES - 1)     # random weather condition
-    for _ in range(10):
-        # epsilon-greedy
-        if random.random() < epsilon:
-            action = random.randint(0, N_ACTIONS - 1)
-        else:
-            action = int(np.argmax(Q[state]))
+    reward -= action                                 # cost of water used
+    if weather["rain"] and action > 0:
+        reward -= 5                                  # watering in rain = waste
+    return new_level, reward
 
-        reward = get_reward(state, action)
-        next_state = random.randint(0, N_STATES - 1)
 
-        # Q-learning update rule
-        Q[state, action] += alpha * (
-            reward + gamma * np.max(Q[next_state]) - Q[state, action]
-        )
-        state = next_state
-    epsilon = max(eps_min, epsilon * eps_decay)
+# ---------------- Q-Learning agent ----------------
+Q = np.zeros((12, 3))
 
-# ---------- 4. LEARNED POLICY ----------
-print("\nLearned Policy")
-print("-" * 55)
-for s in range(N_STATES):
-    soil, temp, rain = decode(s)
-    best = ACTIONS[int(np.argmax(Q[s]))]
-    print(f"Soil={SOIL[soil]:<4} Temp={TEMP[temp]:<6} Rain={RAIN[rain]:<3} -> {best}")
 
-# ---------- 5. TRY YOUR OWN INPUT ----------
-print("\nTest the system (Ctrl+C to quit)")
-while True:
-    try:
-        soil = int(input("Soil (0=Dry, 1=Wet): "))
-        temp = int(input("Temp (0=Normal, 1=High): "))
-        rain = int(input("Rain (0=No, 1=Yes): "))
-        s = state_index(soil, temp, rain)
-        print("Decision:", ACTIONS[int(np.argmax(Q[s]))], "\n")
-    except (KeyboardInterrupt, EOFError):
-        break
+def best_action(s):
+    return int(np.argmax(Q[s]))
+
+
+def train():
+    eps = EPS_START
+    decay = (EPS_MIN / EPS_START) ** (1 / EPISODES)
+    history = []
+    for _ in range(EPISODES):
+        level = random.randint(0, 5)
+        w = new_weather()
+        total = 0
+        for _ in range(STEPS):
+            s = state_index(bucket(level), w["temp"], w["rain"])
+            # epsilon-greedy: explore or exploit
+            a = random.randint(0, 2) if random.random() < eps else best_action(s)
+            new_level, r = env_step(level, a, w)
+            nw = new_weather()
+            s2 = state_index(bucket(new_level), nw["temp"], nw["rain"])
+            # Q-Learning update rule
+            Q[s, a] += ALPHA * (r + GAMMA * Q[s2].max() - Q[s, a])
+            level, w, total = new_level, nw, total + r
+        history.append(total)
+        eps = max(EPS_MIN, eps * decay)
+    return history
+
+
+# ---------------- Testing ----------------
+def simulate(policy, weathers):
+    level, water, dry, wet, ok = 3, 0, 0, 0, 0
+    for w in weathers:
+        a = policy(level, w)
+        water += a
+        level, _ = env_step(level, a, w)
+        if level < 2: dry += 1
+        elif level > 3: wet += 1
+        else: ok += 1
+    return water, ok, dry, wet
+
+
+if __name__ == "__main__":
+    hist = train()
+    print(f"Trained for {EPISODES} episodes. "
+          f"Avg reward first 50: {np.mean(hist[:50]):.1f} | last 50: {np.mean(hist[-50:]):.1f}\n")
+
+    print(f"{'Soil':<5} {'Temp':<7} {'Rain':<5} -> Learned action")
+    for s in range(3):
+        for t in range(2):
+            for r in range(2):
+                i = state_index(s, t, r)
+                print(f"{SOIL[s]:<5} {TEMP[t]:<7} {RAIN[r]:<5} -> {ACTIONS[best_action(i)]:<12} Q={np.round(Q[i], 1)}")
+
+    weathers = [new_weather() for _ in range(100)]
+    agent = simulate(lambda l, w: best_action(state_index(bucket(l), w["temp"], w["rain"])), weathers)
+    base = simulate(lambda l, w: 1, weathers)
+    print("\n100-day test        water  healthy  dry  wet")
+    print(f"Q-Learning agent    {agent[0]:>5}  {agent[1]:>7}  {agent[2]:>3}  {agent[3]:>3}")
+    print(f"Always water        {base[0]:>5}  {base[1]:>7}  {base[2]:>3}  {base[3]:>3}")
+    print(f"Water saved: {round((1 - agent[0] / base[0]) * 100)}%")
