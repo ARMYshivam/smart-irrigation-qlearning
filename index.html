@@ -1,117 +1,152 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
+<html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Smart Irrigation – Q-Learning</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap">
+<title>AquaLearn – Smart Irrigation with Q-Learning</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap">
 <style>
-:root{--bg:#E6EEE4;--card:#F6FAF4;--ink:#17302A;--mute:#5B7168;--line:#C5D4C6;--water:#1D6FA5;--soil:#7A5232;--bad:#B3453A;--good:#2E7D4F;
+:root{--bg:#eef3f6;--card:#fff;--ink:#0f2230;--mute:#587080;--line:#dbe5ea;--pri:#0b6e74;--pri2:#13a3a0;--blue:#2a7fd0;--amber:#d98a1c;--red:#c9473a;--green:#2e9d5b;--nav:#0c2a38;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10201C;--card:#183029;--ink:#E4F0E6;--mute:#93AFA3;--line:#2B4A40;--water:#5FB3E8;--soil:#C9955F;--bad:#E27B6F;--good:#6FCB92}}
-:root[data-theme="dark"]{--bg:#10201C;--card:#183029;--ink:#E4F0E6;--mute:#93AFA3;--line:#2B4A40;--water:#5FB3E8;--soil:#C9955F;--bad:#E27B6F;--good:#6FCB92}
-*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,sans-serif;line-height:1.5}
-main{max-width:980px;margin:0 auto;padding:24px 16px 40px}
-h1{font-size:clamp(1.8rem,5vw,2.8rem);font-weight:800;margin:0 0 4px;letter-spacing:-.02em}
-.sub{color:var(--mute);margin:0 0 24px;max-width:60ch}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media(max-width:720px){.grid{grid-template-columns:1fr}}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
-h2{font-size:1rem;font-weight:600;margin:0 0 12px;color:var(--mute)}
-.row{margin-bottom:14px}.row b{display:block;margin-bottom:6px;font-weight:600}
-.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.seg button{flex:1;padding:12px;border:0;background:transparent;color:var(--ink);font:inherit;cursor:pointer}
-.seg button[aria-pressed=true]{background:var(--ink);color:var(--card);font-weight:600}
-button:focus-visible{outline:3px solid var(--water);outline-offset:-3px}
-.decision{text-align:center;padding:26px 12px}
-.drops{font-size:2.4rem;min-height:3rem;letter-spacing:.2em}
-.big{font-size:clamp(1.8rem,6vw,2.6rem);font-weight:800;margin:4px 0}
-.why{color:var(--mute);margin:0}
-.bar{display:grid;grid-template-columns:110px 1fr 56px;gap:8px;align-items:center;margin:8px 0;font-size:.9rem}
-.track{height:10px;background:var(--line);border-radius:6px;overflow:hidden}
-.fill{height:100%;background:var(--water);transition:width .3s}
-.fill.best{background:var(--good)}
-table{width:100%;border-collapse:collapse;font-size:.88rem}
-th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
-tr.cur{background:color-mix(in srgb,var(--water) 18%,transparent)}
-.wrap{overflow-x:auto}
-.act{background:var(--water);color:#fff;border:0;border-radius:10px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;margin-top:10px}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b161d;--card:#12232d;--ink:#e5f0f5;--mute:#8fa8b6;--line:#23404f;--pri:#2cc4bf;--pri2:#2cc4bf;--blue:#6aaef0;--amber:#f0b04f;--red:#f0897d;--green:#5fd18d;--nav:#081219}}
+:root[data-theme="dark"]{--bg:#0b161d;--card:#12232d;--ink:#e5f0f5;--mute:#8fa8b6;--line:#23404f;--pri:#2cc4bf;--pri2:#2cc4bf;--blue:#6aaef0;--amber:#f0b04f;--red:#f0897d;--green:#5fd18d;--nav:#081219}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+header{background:var(--nav);color:#e8f4f6;padding:14px 20px}
+.bar{max-width:1040px;margin:auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#13a3a0,#2a7fd0);display:grid;place-items:center;font-weight:800}
+.bar h1{font-size:1.15rem;margin:0;font-weight:800}
+.bar small{color:#9bb8c4;display:block;font-weight:400;font-size:.78rem}
+.pill{margin-left:auto;font-size:.8rem;padding:4px 12px;border-radius:99px;background:#1b4152;color:#bfe3ea}
+.pill.on{background:#164e33;color:#8be8b3}
+main{max-width:1040px;margin:auto;padding:20px 16px 40px;display:grid;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+.card h2{font-size:1rem;margin:0 0 4px;font-weight:700}
+.sub{color:var(--mute);font-size:.85rem;margin:0 0 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;border-top:3px solid var(--pri2)}
+.kpi span{color:var(--mute);font-size:.8rem}
+.kpi b{display:block;font-size:1.7rem;font-weight:800;margin-top:2px}
+button,select{font:inherit;color:var(--ink)}
+button{background:var(--pri);color:#fff;border:0;border-radius:8px;padding:9px 18px;font-weight:600;cursor:pointer}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]) button:not(.alt){color:#04201f}}
+:root[data-theme=dark] button:not(.alt){color:#04201f}
+button.alt{background:transparent;color:var(--pri);border:1px solid var(--pri)}
+button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,select:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+label{font-size:.82rem;color:var(--mute);display:grid;gap:3px}
+.act{display:inline-block;padding:12px 22px;border-radius:10px;font-weight:800;font-size:1.25rem;color:#fff;margin-top:14px}
+.a0{background:#6c8190}.a1{background:var(--blue)}.a2{background:#17609e}
+.gauge{display:flex;gap:18px;align-items:flex-end}
+.tank{width:84px;height:200px;border:2px solid var(--line);border-radius:10px;position:relative;overflow:hidden;background:var(--bg)}
+.fill{position:absolute;bottom:0;left:0;right:0;transition:height .5s,background .5s}
+.zone{position:absolute;left:0;right:0;border-top:2px dashed var(--green);border-bottom:2px dashed var(--green);background:rgba(46,157,91,.12)}
+.live{flex:1;display:grid;gap:8px;font-size:.9rem}
+.live div{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:5px 0}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th{color:var(--mute);font-weight:600;text-align:left}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td.q{text-align:center;font-variant-numeric:tabular-nums;border-radius:4px}
+td.best{font-weight:800;outline:2px solid var(--pri);outline-offset:-2px}
 svg{width:100%;height:auto;display:block}
-.full{grid-column:1/-1}
-</style>
-</head>
-<body>
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:14px}
+.cmp .kpi{border-top-color:var(--blue)}
+.cmp .kpi.win{border-top-color:var(--green)}
+.note{color:var(--mute);font-size:.82rem;margin:10px 0 0}
+footer{color:var(--mute);font-size:.8rem;text-align:center;padding:0 16px 24px}
+</style></head><body>
+<header><div class="bar"><div class="logo" aria-hidden="true">A</div>
+<h1>AquaLearn<small>Smart irrigation controller using Q-Learning</small></h1>
+<span class="pill" id="pill">Model: untrained</span></div></header>
 <main>
-<h1>Smart Irrigation</h1>
-<p class="sub">An agent trained with Q-Learning decides when to water. Pick the field conditions and see what it learned.</p>
-<div class="grid">
-  <section class="card">
-    <h2>Field conditions</h2>
-    <div class="row"><b>Soil moisture</b><div class="seg" data-k="soil"><button data-v="0">Dry</button><button data-v="1">Wet</button></div></div>
-    <div class="row"><b>Temperature</b><div class="seg" data-k="temp"><button data-v="0">Normal</button><button data-v="1">High</button></div></div>
-    <div class="row"><b>Rain</b><div class="seg" data-k="rain"><button data-v="0">No</button><button data-v="1">Yes</button></div></div>
-  </section>
-  <section class="card decision" aria-live="polite">
-    <div class="drops" id="drops"></div>
-    <div class="big" id="act"></div>
-    <p class="why" id="why"></p>
-  </section>
-  <section class="card">
-    <h2>Q-values for this condition</h2>
-    <div id="bars"></div>
-  </section>
-  <section class="card">
-    <h2>Training progress (average reward)</h2>
-    <svg id="chart" viewBox="0 0 320 150" role="img" aria-label="Average reward per 100 episodes"></svg>
-    <button class="act" id="retrain">Train again</button>
-    <span class="why" id="ep" style="margin-left:8px"></span>
-  </section>
-  <section class="card full">
-    <h2>Learned policy (Q-table)</h2>
-    <div class="wrap"><table id="tbl"></table></div>
-  </section>
+<div class="kpis">
+<div class="kpi"><span>Training episodes</span><b id="k1">0</b></div>
+<div class="kpi"><span>Avg reward (last 50)</span><b id="k2">–</b></div>
+<div class="kpi"><span>States learned</span><b id="k3">0 / 12</b></div>
+<div class="kpi"><span>Water saved vs baseline</span><b id="k4">–</b></div>
 </div>
+
+<div class="grid">
+<section class="card"><h2>Model training</h2><p class="sub">Agent learns on a simulated field. α = 0.1, γ = 0.9, ε decays 1.0 → 0.05.</p>
+<div class="row"><label>Episodes<select id="eps"><option>300</option><option selected>1000</option><option>3000</option></select></label>
+<button id="train" style="align-self:end">Train model</button><button class="alt" id="reset" style="align-self:end">Reset</button></div>
+<svg id="chart" viewBox="0 0 520 150" role="img" aria-label="Reward per episode" style="margin-top:12px"></svg>
+<p class="note">Reward per episode (moving average). A rising line means the agent is learning.</p></section>
+
+<section class="card"><h2>Decision tester</h2><p class="sub">Choose sensor readings and see the action the agent recommends.</p>
+<div class="row"><label>Soil moisture<select id="s"><option>Dry</option><option>OK</option><option>Wet</option></select></label>
+<label>Temperature<select id="t"><option>Normal</option><option>High</option></select></label>
+<label>Rain<select id="r"><option>No</option><option>Yes</option></select></label></div>
+<div id="ans" class="act a0">Train the model first</div></section>
+</div>
+
+<section class="card"><h2>Live field simulation</h2><p class="sub">Each tick generates new weather and the agent decides. The green band is the healthy moisture range.</p>
+<div class="gauge"><div class="tank" aria-label="Soil moisture gauge"><div class="zone" style="bottom:33.3%;height:33.3%"></div><div class="fill" id="fill"></div></div>
+<div class="live">
+<div><span>Soil</span><b id="l1">–</b></div><div><span>Temperature</span><b id="l2">–</b></div><div><span>Rain</span><b id="l3">–</b></div>
+<div><span>Agent action</span><b id="l4">–</b></div><div><span>Water used</span><b id="l5">0 units</b></div>
+<div class="row"><button id="play">Start</button><button class="alt" id="stepb">Single step</button></div></div></div></section>
+
+<section class="card"><h2>Q-table</h2><p class="sub">Learned value of each action in each state. Outlined cell = chosen action.</p>
+<div class="tablewrap"><table id="qt"></table></div></section>
+
+<section class="card"><h2>Water savings test</h2><p class="sub">100 days of identical random weather. Baseline waters every day.</p>
+<button id="cmp">Run 100-day test</button><div class="cmp" id="res"></div></section>
 </main>
+<footer>Trained on simulated data. Soil is tracked as 6 moisture levels grouped into Dry, OK and Wet.</footer>
+
 <script>
-const ACTIONS=["DON'T WATER","WATER","MORE WATER"],DROPS=["🚫","💧","💧💧💧"];
-const SN=["Dry","Wet"],TN=["Normal","High"],RN=["No","Yes"];
-const idx=(s,t,r)=>s*4+t*2+r, dec=i=>[i>>2,(i>>1)&1,i&1];
-function reward(st,a){const [s,t,r]=dec(st);
-  if(r)return [10,-10,-15][a]; if(s)return [10,-5,-10][a];
-  return t?[-10,5,10][a]:[-8,10,-3][a];}
-const WHY=(s,t,r)=>r?"It is raining, so the plants get water for free.":s?"The soil is already wet, so extra water is wasted.":t?"Dry soil and high heat: the plants need a lot of water.":"The soil is dry, so a normal watering is enough.";
-let Q,hist=[],cond={soil:0,temp:1,rain:0};
-function train(){
-  Q=Array.from({length:8},()=>[0,0,0]);hist=[];let eps=1,tot=0,n=0;
-  for(let e=0;e<3000;e++){
-    let st=Math.floor(Math.random()*8);
-    for(let k=0;k<10;k++){
-      const a=Math.random()<eps?Math.floor(Math.random()*3):Q[st].indexOf(Math.max(...Q[st]));
-      const r=reward(st,a),ns=Math.floor(Math.random()*8);
-      Q[st][a]+=0.1*(r+0.9*Math.max(...Q[ns])-Q[st][a]);
-      tot+=r;n++;st=ns;
-    }
-    eps=Math.max(0.05,eps*0.995);
-    if((e+1)%100===0){hist.push(tot/n);tot=0;n=0;}
-  }
-}
-const best=i=>Q[i].indexOf(Math.max(...Q[i]));
-function render(){
-  const i=idx(cond.soil,cond.temp,cond.rain),b=best(i);
-  document.querySelectorAll(".seg").forEach(g=>g.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(+x.dataset.v===cond[g.dataset.k]))));
-  drops.textContent=DROPS[b];act.textContent=ACTIONS[b];why.textContent=WHY(cond.soil,cond.temp,cond.rain);
-  const mn=Math.min(...Q[i]),mx=Math.max(...Q[i]),sp=(mx-mn)||1;
-  bars.innerHTML=ACTIONS.map((n,a)=>`<div class="bar"><span>${n}</span><div class="track"><div class="fill ${a===b?"best":""}" style="width:${8+92*(Q[i][a]-mn)/sp}%"></div></div><span>${Q[i][a].toFixed(1)}</span></div>`).join("");
-  tbl.innerHTML="<tr><th>Soil</th><th>Temp</th><th>Rain</th><th>Best action</th></tr>"+Q.map((_,s)=>{const [a,t,r]=dec(s);return `<tr class="${s===i?"cur":""}"><td>${SN[a]}</td><td>${TN[t]}</td><td>${RN[r]}</td><td><b>${ACTIONS[best(s)]}</b></td></tr>`}).join("");
-  const lo=Math.min(...hist),hi=Math.max(...hist),W=320,H=150,p=14;
-  const pts=hist.map((v,k)=>`${p+k*(W-2*p)/(hist.length-1)},${H-p-(v-lo)/((hi-lo)||1)*(H-2*p)}`).join(" ");
-  chart.innerHTML=`<line x1="${p}" y1="${H-p}" x2="${W-p}" y2="${H-p}" stroke="var(--line)"/><polyline points="${pts}" fill="none" stroke="var(--water)" stroke-width="2.5"/><text x="${p}" y="10" font-size="9" fill="var(--mute)">${hi.toFixed(1)}</text><text x="${p}" y="${H-3}" font-size="9" fill="var(--mute)">${lo.toFixed(1)}</text><text x="${W-p}" y="${H-3}" font-size="9" text-anchor="end" fill="var(--mute)">3000 episodes</text>`;
-  ep.textContent="Final avg reward: "+hist[hist.length-1].toFixed(1);
-}
-document.querySelectorAll(".seg button").forEach(x=>x.onclick=()=>{cond[x.parentNode.dataset.k]=+x.dataset.v;render();});
-retrain.onclick=()=>{train();render();};
-train();render();
-</script>
-</body>
-</html>
+const SOIL=["Dry","OK","Wet"],TEMP=["Normal","High"],RAIN=["No","Yes"],ACT=["Don't water","Water","More water"];
+const $=id=>document.getElementById(id),idx=(s,t,r)=>s*4+t*2+r,bucket=l=>l<2?0:l<4?1:2;
+let Q=newQ(),trained=false,rewards=[],saved=null,lvl=3,used=0,timer=null;
+function newQ(){return Array.from({length:12},()=>[0,0,0])}
+function weather(){return{t:Math.random()<.5?1:0,r:Math.random()<.2?1:0}}
+function step(level,a,w){let d=0;if(Math.random()<(w.t?.8:.35))d--;if(w.r&&Math.random()<.9)d++;d+=a;
+const nl=Math.max(0,Math.min(5,level+d));let rw=nl>=2&&nl<=3?10:nl<2?(nl===0?-15:-10):(nl===5?-10:-5);
+rw-=a;if(w.r&&a>0)rw-=5;return{nl,rw}}
+const best=s=>Q[s].indexOf(Math.max(...Q[s]));
+function train(n){rewards=[];let eps=1;const dec=Math.pow(.05,1/n);
+for(let e=0;e<n;e++){let l=Math.floor(Math.random()*6),w=weather(),tot=0;
+for(let k=0;k<30;k++){const s=idx(bucket(l),w.t,w.r);const a=Math.random()<eps?Math.floor(Math.random()*3):best(s);
+const{nl,rw}=step(l,a,w),nw=weather(),s2=idx(bucket(nl),nw.t,nw.r);
+Q[s][a]+=.1*(rw+.9*Math.max(...Q[s2])-Q[s][a]);l=nl;w=nw;tot+=rw}
+rewards.push(tot);eps=Math.max(.05,eps*dec)}trained=true}
+function avg(i,n){const a=rewards.slice(Math.max(0,i-n+1),i+1);return a.reduce((x,y)=>x+y,0)/a.length}
+function chart(){if(!rewards.length){$('chart').innerHTML='';return}
+const av=rewards.map((_,i)=>avg(i,20)),mn=Math.min(...av),mx=Math.max(...av),rg=(mx-mn)||1;
+const p=av.map((v,i)=>`${40+i/(av.length-1||1)*470},${130-(v-mn)/rg*110}`).join(' ');
+$('chart').innerHTML=`<line x1="40" y1="130" x2="510" y2="130" stroke="var(--line)"/><line x1="40" y1="20" x2="40" y2="130" stroke="var(--line)"/><polyline fill="none" stroke="var(--pri2)" stroke-width="2.5" points="${p}"/><text x="36" y="24" font-size="11" text-anchor="end" fill="var(--mute)">${mx.toFixed(0)}</text><text x="36" y="134" font-size="11" text-anchor="end" fill="var(--mute)">${mn.toFixed(0)}</text><text x="275" y="148" font-size="11" text-anchor="middle" fill="var(--mute)">Episodes</text>`}
+function table(){let all=Q.flat(),mn=Math.min(...all),mx=Math.max(...all),rg=(mx-mn)||1;
+let h='<tr><th>Soil</th><th>Temp</th><th>Rain</th>'+ACT.map(a=>`<th style="text-align:center">${a}</th>`).join('')+'<th>Decision</th></tr>';
+for(let s=0;s<3;s++)for(let t=0;t<2;t++)for(let r=0;r<2;r++){const i=idx(s,t,r),b=best(i);
+h+=`<tr><td>${SOIL[s]}</td><td>${TEMP[t]}</td><td>${RAIN[r]}</td>`+Q[i].map((v,a)=>{const k=trained?(v-mn)/rg:0;
+return `<td class="q ${trained&&a===b?'best':''}" style="background:rgba(19,163,160,${(k*.4).toFixed(2)})">${v.toFixed(1)}</td>`}).join('')+`<td><b>${trained?ACT[b]:'–'}</b></td></tr>`}
+$('qt').innerHTML=h}
+function ask(){const e=$('ans');if(!trained){e.className='act a0';e.textContent='Train the model first';return}
+const a=best(idx(+$('s').selectedIndex,+$('t').selectedIndex,+$('r').selectedIndex));e.className='act a'+a;e.textContent=ACT[a]}
+function kpis(){$('k1').textContent=rewards.length;$('k2').textContent=rewards.length?avg(rewards.length-1,50).toFixed(0):'–';
+$('k3').textContent=(trained?Q.filter(q=>q.some(v=>v!==0)).length:0)+' / 12';$('k4').textContent=saved===null?'–':saved+'%';
+$('pill').textContent=trained?'Model: trained':'Model: untrained';$('pill').className='pill'+(trained?' on':'')}
+function gauge(){const f=$('fill');f.style.height=(lvl+.5)/6*100+'%';const b=bucket(lvl);f.style.background=b===1?'var(--green)':b===0?'var(--amber)':'var(--blue)';$('l1').textContent=SOIL[b]+' (level '+lvl+'/5)'}
+function tick(){if(!trained){stop();$('l4').textContent='Train the model first';return}
+const w=weather(),a=best(idx(bucket(lvl),w.t,w.r));used+=a;
+$('l2').textContent=TEMP[w.t];$('l3').textContent=RAIN[w.r];$('l4').textContent=ACT[a];$('l5').textContent=used+' units';
+lvl=step(lvl,a,w).nl;gauge()}
+function stop(){clearInterval(timer);timer=null;$('play').textContent='Start'}
+$('play').onclick=()=>{if(timer)return stop();if(!trained){tick();return}$('play').textContent='Pause';tick();timer=setInterval(tick,1000)};
+$('stepb').onclick=tick;
+function all(){chart();table();ask();kpis();gauge()}
+$('train').onclick=()=>{const n=+$('eps').value;Q=newQ();saved=null;train(n);all()};
+$('reset').onclick=()=>{stop();Q=newQ();trained=false;rewards=[];saved=null;lvl=3;used=0;$('res').innerHTML='';$('l5').textContent='0 units';all()};
+['s','t','r'].forEach(i=>$(i).onchange=ask);
+function sim(pol,ws){let l=3,wa=0,dry=0,wet=0,ok=0;for(const w of ws){const a=pol(l,w);wa+=a;l=step(l,a,w).nl;l<2?dry++:l>3?wet++:ok++}return{wa,dry,wet,ok}}
+$('cmp').onclick=()=>{if(!trained){$('res').innerHTML='<p class="note">Train the model first.</p>';return}
+const ws=Array.from({length:100},weather),ag=sim((l,w)=>best(idx(bucket(l),w.t,w.r)),ws),bl=sim(()=>1,ws);
+saved=bl.wa?Math.round((1-ag.wa/bl.wa)*100):0;
+const c=(n,o,cl)=>`<div class="kpi ${cl}"><span>${n}</span><b>${o.wa} units</b><span>Healthy ${o.ok} days · Dry ${o.dry} · Wet ${o.wet}</span></div>`;
+$('res').innerHTML=c('Q-Learning agent',ag,'win')+c('Always water (baseline)',bl,'')+`<div class="kpi win"><span>Water saved</span><b>${saved}%</b><span>vs baseline</span></div>`;kpis()};
+all();
+</script></body></html>
